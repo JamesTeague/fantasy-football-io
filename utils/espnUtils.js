@@ -2,6 +2,8 @@
  * Functions that scrape fantasy football information from the espn team website.
  *
  * Created by vijay.budhram on 7/11/14.
+ * 
+ * Edited by JamesTeague on 9/13/16
  */
 (function () {
     'use strict';
@@ -12,9 +14,9 @@
     var async = require('async');
     var Team = require('../models/Team');
     var Player = require('../models/Player');
-    var LOGIN_URL = 'https://r.espn.go.com/members/util/loginUser';
-    var FRONTPAGE_URL = 'http://games.espn.go.com/frontpage/';
-    var PLAYER_STATS_URL = 'http://games.espn.go.com/ffl/tools/projections';
+    var LOGIN_URL = 'https://espn.go.com/login/';
+    var FRONTPAGE_URL = 'http://espn.com/fantasy/';
+    var PLAYER_STATS_URL = 'http://games.espn.com/ffl/tools/projections/';
 
     function login(username, password) {
         console.log('Logging into ESPN with username/password = ' + username + '/*****');
@@ -107,7 +109,7 @@
                                 var playerTeamName = playerTokens[0];
                                 var position = playerTokens[1];
 
-                                if (teamUrl.indexOf('2014') > -1) {
+                                if (teamUrl.indexOf('2016') > -1) {
                                     // TODO Figure this out later, not sure how to handle current year, point and rankings
                                     var slot = cell.children[0].children[0].data;
 
