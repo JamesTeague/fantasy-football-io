@@ -4,6 +4,8 @@
 
 'use strict';
 
+var dotenv = require('dotenv').config();
+
 //  Static variables
 var HOST = process.env.HOST || 'localhost';
 var PORT = process.env.PORT || 8080;
