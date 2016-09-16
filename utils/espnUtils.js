@@ -237,12 +237,19 @@
                     var link = links[i];
                     // Check to see if this is a news article
                     if (link.attribs.href && link.attribs.href.indexOf('/fantasy/football/story') > -1) {
-                        newsArticles.push({
-                            title: link.children[0].data,
-                            url: link.attribs.href,
-                            date: new Date(),
-                            source: 'ESPN Football'
+                        var article = newsArticles.filter(function(obj){
+                            if(obj.url == link.attribs.href)
+                                return obj;
                         });
+                        if(!article.length){
+                            newsArticles.push({
+                                title: findLinkTitle(link),
+                                url: link.attribs.href,
+                                date: new Date(),
+                                source: 'ESPN Football'
+                            });
+                        }
+                        
                     }
                 }
 
@@ -251,6 +258,39 @@
         });
 
         return getNewsQ.promise;
+    }
+
+
+
+    function findTitle(child) {
+        if(child.type == "text"){
+          return child;
+        }
+        else if (child.children != null){
+          var i;
+          var result = null;
+          for(var i=0; result == null && i < child.children.length; i++){
+               result = findTitle(child.children[i]);
+          }
+          return result;
+     }
+     return null;
+    }
+
+    function findLinkTitle(link) {
+        for(var i=0; i < link.children.length; i++){
+            var child = findTitle(link.children[i]);
+            if(child != null) return child.data;
+        }
+        // Must search parent, for now just parsing url
+        return parseTitle(link.attribs.href);
+        // return findLinkTitle(link.parent);
+        
+    }
+
+    function parseTitle(url) {
+        var pieces = url.split('/');
+        return pieces[pieces.length-1].replace('-', " ");
     }
 
     function getScoreboards(user, crytoUtils) {
