@@ -282,15 +282,23 @@
             var child = findTitle(link.children[i]);
             if(child != null) return child.data;
         }
+        try{
+            if(link.parent.children[2].children[0].children[1].children[0].children[0].data){
+                return link.parent.children[2].children[0].children[1].children[0].children[0].data
+            }
+        }
+        catch(err) {
+            return parseTitle(link.attribs.href);
+        }
         // Must search parent, for now just parsing url
-        return parseTitle(link.attribs.href);
-        // return findLinkTitle(link.parent);
+        // return parseTitle(link.attribs.href);
+
         
     }
 
     function parseTitle(url) {
         var pieces = url.split('/');
-        return pieces[pieces.length-1].replace('-', " ");
+        return pieces[pieces.length-1];
     }
 
     function getScoreboards(user, crytoUtils) {
