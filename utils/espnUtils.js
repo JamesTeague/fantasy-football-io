@@ -17,6 +17,7 @@
     var LOGIN_URL = 'https://espn.go.com/login/';
     var FRONTPAGE_URL = 'http://espn.com/fantasy/';
     var PLAYER_STATS_URL = 'http://games.espn.com/ffl/tools/projections/';
+    var DOMAIN_URL = 'http://espn.com';
 
     function login(username, password) {
         console.log('Logging into ESPN with username/password = ' + username + '/*****');
@@ -244,7 +245,7 @@
                         if(!article.length){
                             newsArticles.push({
                                 title: findLinkTitle(link),
-                                url: link.attribs.href,
+                                url: DOMAIN_URL+link.attribs.href,
                                 date: new Date(),
                                 source: 'ESPN Football'
                             });
@@ -290,15 +291,19 @@
         catch(err) {
             return parseTitle(link.attribs.href);
         }
-        // Must search parent, for now just parsing url
-        // return parseTitle(link.attribs.href);
-
-        
     }
 
     function parseTitle(url) {
         var pieces = url.split('/');
-        return pieces[pieces.length-1];
+        return titleCase(pieces[pieces.length-1].replace(/-/g, " "));
+    }
+
+    function titleCase(str) {
+        var splitStr = str.toLowerCase().split(' ');
+        for (var i = 0; i < splitStr.length; i++) {
+            splitStr[i] = splitStr[i].charAt(0).toUpperCase() + splitStr[i].substring(1);     
+        }
+        return splitStr.join(' '); 
     }
 
     function getScoreboards(user, crytoUtils) {
