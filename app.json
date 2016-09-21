@@ -1,0 +1,15 @@
+{
+  "name": "fantasy-football-io",
+  "description": "API for unifying Fantasy News and Leagues",
+  "scripts": {},
+  "env": {
+    "MONGOLAB_URI": "mongodb://admin:admin@ds035766.mlab.com:35766/fantasy-football-staging",
+    "REDIS_SESSION_HOST": "pub-redis-12514.us-east-1-3.3.ec2.garantiadata.com",
+    "REDIS_SESSION_PORT": "12514",
+    "NODE_ENV": "staging",
+    "REDIS_SESSION_PASS": "fantasy-football-io"
+  },
+  "formation": {},
+  "addons": [],
+  "buildpacks": []
+}
