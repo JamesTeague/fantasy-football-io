@@ -78,7 +78,7 @@ var scoreboardWorker = require('./workers/scoreboardWorker')(socketio);
 if (env === 'development') {
     app.use(express.static(__dirname + '/web'));
 } else if (env === 'production' || env === 'staging') {
-    app.use(express.static(__dirname + '/dist'));
+    app.use(express.static(__dirname + '/web'));
     require('newrelic');
 }
 
