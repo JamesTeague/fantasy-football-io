@@ -29,7 +29,7 @@ web/bower_components
 .idea
 
 # Environment definitions
-*.env
+
 
 # Build files
 dist
