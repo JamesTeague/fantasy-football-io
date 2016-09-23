@@ -4,21 +4,44 @@
 
 'use strict';
 
+var dotenv = require('dotenv').config();
+
 //  Static variables
 var HOST = process.env.HOST || 'localhost';
 var PORT = process.env.PORT || 8080;
 var APP_NAME = 'fantasy-football-io';
 var DB_URL = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || 'localhost:27017/fantasy-football';
 var env = process.env.NODE_ENV || 'development';
+var salt = process.env.SALT || 'badSalt';
+var sessionSecret = process.env.SECRET || 'keyboardcat';
+var redisSessionHost = process.env.REDIS_SESSION_HOST || 'localhost';
+var redisSessionPort = process.env.REDIS_SESSION_PORT || 6379;
+var redisSessionPass = process.env.REDIS_SESSION_PASS;
+
+if (env === 'production' || env === 'staging') {
+    require('newrelic');
+}
+// Libaries
+var q = require('q');
 
 // Required middleware
 var express = require('express');
 var bodyParser = require('body-parser');
 var cookieParser = require('cookie-parser');
 var morgan = require('morgan');
-var session = require('express-session');
 var flash = require('connect-flash');
-//var ejs = require('ejs');
+var io = require('socket.io');
+var http = require('http');
+var favicon = require('serve-favicon');
+
+// Configure Session
+var session = require('express-session');
+var RedisStore = require('connect-redis')(session);
+var redisStore = new RedisStore({
+    host: redisSessionHost,
+    port: redisSessionPort,
+    pass: redisSessionPass
+});
 
 // Database and models import
 var db = require('./database/db')(DB_URL);
@@ -27,29 +50,36 @@ var db = require('./database/db')(DB_URL);
 var passport = require('./auth/LocalStrategy')(db);
 
 // Utils
+var encryptionUtils = require('./utils/encryptionUtils')(salt);
 var espnUtils = require('./utils/espnUtils');
+var yahooUtils = require('./utils/yahooUtils');
 var newsUtils = require('./utils/newsUtils');
-var bcrypt = require('bcrypt');
 var validationRules = require('./utils/validationUtils');
 
+// Configure app
 var app = express();
-
 app.use(morgan('combined'));
 app.use(cookieParser());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded());
-app.use(session({secret: 'keyboard cat'}));
+app.use(flash());
+app.use(session({store: redisStore, secret: sessionSecret}));
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(flash());
-//app.set('views', __dirname + '/web');
-//app.set('view engine', 'ejs');
-//app.engine('html', require('ejs').renderFile);
+app.use(favicon(__dirname + '/favicon.ico'));
+
+// Setup socketio
+var server = http.Server(app);
+var socketio = io(server);
+
+// Workers
+var scoreboardWorker = require('./workers/scoreboardWorker')(socketio);
 
 if (env === 'development') {
     app.use(express.static(__dirname + '/web'));
-} else if (env === 'production') {
-    app.use(express.static(__dirname + '/dist'));
+} else if (env === 'production' || env === 'staging') {
+    app.use(express.static(__dirname + '/web'));
+    require('newrelic');
 }
 
 // Route endpoints
@@ -65,19 +95,27 @@ authRouter.post('/doLogin', function (req, res, next) {
             req.session.messages = [info.message];
             return res.send(400, info.message);
         }
-//        user = user[0];
+
         req.logIn(user, function (err) {
             if (err) {
                 return next(err);
             }
-//            var currentUser = user;
-//            delete currentUser.passwordHash;
-            return res.send(200, user[0]);
-//            return res.render('index.html', {user: user});
+
+            user[0].sites = undefined;
+            var currentUser = {
+                email: user[0].email
+            };
+
+            return res.send(200, currentUser);
         });
     })(req, res, next);
 });
 
+authRouter.post('/logout', function (req, res, next) {
+    console.log('Logging out');
+    req.logout();
+    res.send(204);
+});
 
 app.use(authRouter);
 
@@ -94,7 +132,7 @@ apiRouter.route('/about')
 apiRouter.route('/users')
     .post(function (req, res) {
         validationRules.validateUser(req.body).then(function () {
-            var passwordHash = bcrypt.hashSync(req.body.password, 8);
+            var passwordHash = encryptionUtils.hash(req.body.password);
             var newUser = new db.User({
                 email: req.body.email,
                 passwordHash: passwordHash
@@ -104,7 +142,11 @@ apiRouter.route('/users')
                 if (err) {
                     res.send(400, err);
                 } else {
-                    res.json(result);
+                    var apiResult = {
+                        user: cleanUser(result)
+                    };
+
+                    res.json(apiResult);
                 }
             });
         }, function (err) {
@@ -118,7 +160,7 @@ apiRouter.route('/news')
             res.json(articles);
         });
     })
-    .put(function(req, res){
+    .put(function (req, res) {
         newsUtils.currentHeadlines().then(function (articles) {
             articles.forEach(function (article) {
                 var newsArticle = new db.NewsArticle(article);
@@ -145,41 +187,310 @@ function auth(req, res, next) {
     }
 }
 
-apiRouter.use('/espn', auth);
+apiRouter.route('/users', auth)
+    .get(function (req, res) {
+        db.User.find({'email': req.user[0].email}).exec(function (err, results) {
+            var user = cleanUser(results[0]);
+            if (err) {
+                res.send(400, err);
+            } else {
+                if (user) {
+                    res.json(user);
+                } else {
+                    res.send(400, 'Invalid request');
+                }
 
-// Add espn team to logged in user
-apiRouter.route('/espn')
-    .post(function (req, res) {
-        var username = req.body.username;
-        var password = req.body.password;
-
-        espnUtils.getTeams(username, password).then(function (teams) {
-            // Add team to user
-            // TODO Perform validation on teams
-            if (req.user[0]) {
-                db.User.find({'email': req.user[0].email}).exec(function (err, results) {
-                    var user = results[0];
-                    user.teams = user.teams.concat(teams);
-                    user.save(function (err, result) {
-                        if (err) {
-                            res.send(400, err);
-                        } else {
-                            res.json(user);
-                        }
-                    });
-                });
             }
-
         }, function (err) {
             res.send(400, err);
         });
     });
 
+apiRouter.route('/scoreboards')
+    .get(function (req, res) {
+        db.User.find({'email': req.user[0].email}).exec(function (err, results) {
+            var user = results[0];
+            if (user) {
+                var defers = [];
+                user.sites.forEach(function (site) {
+                    var defer = q.defer();
+                    defers.push(defer.promise);
+                    switch (site.name) {
+                        case 'espn':
+                        {
+                            espnUtils.getScoreboards(user, encryptionUtils).then(function (scoreboards) {
+                                defer.resolve(scoreboards);
+                            }, function (err) {
+                                console.log(err);
+                                defer.reject(err);
+                            });
+                            break;
+                        }
+                        case 'yahoo':
+                        {
+                            yahooUtils.getScoreboards(user, encryptionUtils).then(function (scoreboards) {
+                                defer.resolve(scoreboards);
+                            }, function (err) {
+                                console.log(err);
+                                defer.reject(err);
+                            });
+                            break;
+                        }
+                    }
+                });
+
+                q.allSettled(defers).done(function (results) {
+                    var apiResult = {
+                        scoreboards: []
+                    };
+
+                    results.forEach(function(result){
+                        if(result.state === 'fulfilled'){
+                            apiResult.scoreboards = apiResult.scoreboards.concat(result.value);
+                        }
+                    });
+
+                    db.LeagueScoreboard.create(apiResult.scoreboards, function (err, results) {
+                        // Register boards with socketio for realtime score updates
+                        // TODO Maybe move this to a register api call
+                        scoreboardWorker.registerBoard({
+                            user: user,
+                            encryptionUtils: encryptionUtils
+                        });
+
+                        res.send(apiResult);
+                    });
+                });
+            }
+        });
+    });
+
+apiRouter.route('/scoreboard/:site/:sport')
+    .post(function (req, res) {
+        db.User.find({'email': req.user[0].email, 'sites.name': req.params.site}).exec(function (err, results) {
+            var user = results[0];
+            if (user) {
+                var defer = q.defer();
+                switch (req.params.site) {
+                    case 'espn':
+                    {
+                        espnUtils.getScoreboards(user, encryptionUtils).then(function (scoreboards) {
+                            defer.resolve(scoreboards);
+                        }, function (err) {
+                            defer.reject(err);
+                        });
+                        break;
+                    }
+                    case 'yahoo':
+                    {
+                        yahooUtils.getScoreboards(user, encryptionUtils).then(function (scoreboards) {
+                            defer.resolve(scoreboards);
+                        }, function (err) {
+                            defer.reject(err);
+                        });
+                        break;
+                    }
+                }
+
+                defer.promise.then(function(scoreboards){
+                    db.LeagueScoreboard.create(scoreboards, function (err, result) {
+                        var apiResult = {
+                            scoreboards: scoreboards
+                        };
+
+                        // Register boards with socketio for realtime score updates
+                        // TODO Maybe move this to a register api call
+                        scoreboardWorker.registerBoard({
+                            user: user,
+                            encryptionUtils: encryptionUtils,
+                            scoreboards: scoreboards
+                        });
+
+                        res.json(apiResult);
+                    });
+                }, function(err){
+                    res.status(400).send({ error: err.message });
+                });
+
+            } else {
+                res.send(400, {error: 'Unable to get user\'s scoreboard'});
+            }
+        });
+    });
+
+apiRouter.use('/:site', auth);
+
+apiRouter.route('/:site')
+    .get(function (req, res) {
+        db.User.find({'email': req.user[0].email, 'sites.name': req.params.site}).exec(function (err, results) {
+            var user = cleanUser(results[0]);
+            if (err) {
+                res.send(400, err);
+            } else {
+                if (user) {
+
+                    var apiResult = {
+                        sites: []
+                    };
+
+                    user.sites.forEach(function (site) {
+                        if (site.name === req.params.site) {
+                            apiResult.sites.push(site);
+                        }
+                    });
+
+                    res.json(apiResult);
+                } else {
+                    res.send(400, 'Invalid request');
+                }
+
+            }
+        });
+    })
+    .post(function (req, res) {
+        var username = req.body.username;
+        var password = req.body.password;
+
+//        if (req.user[0]) {
+//            res.send(400, 'No user is logged in');
+//        }
+
+
+        db.User.find({'email': req.user[0].email}).exec(function (err, results) {
+            var user = results[0];
+
+            var site = {
+                name: req.params.site,
+                username: encryptionUtils.encrypt(username),
+                password: encryptionUtils.encrypt(password),
+                sports: [
+                    {
+                        name: 'football',
+                        teams: []
+                    }
+                ]
+            };
+
+            switch (req.params.site) {
+                case 'espn':
+                {
+                    espnUtils.getTeams(username, password).then(function (teams) {
+                        site.sports[0].teams = teams;
+                        user.sites.push(site);
+                        user.save(function (err, result) {
+                            if (err) {
+                                res.send(400, err);
+                            } else {
+                                // TODO This should really only return the newly created site
+                                user = cleanUser(user);
+                                res.json(user.sites[user.sites.length - 1]);
+                            }
+                        });
+                    }, function (err) {
+                        res.status(400).send({ error: err.message });
+                    });
+
+                    break;
+                }
+                case 'yahoo':
+                {
+                    yahooUtils.getTeams(username, password).then(function (teams) {
+                        site.sports[0].teams = teams;
+                        user.sites.push(site);
+                        user.save(function (err, result) {
+                            if (err) {
+                                res.send(400, err);
+                            } else {
+                                // TODO This should really only return the newly created site
+                                user = cleanUser(user);
+                                res.json(user.sites[user.sites.length - 1]);
+                            }
+                        });
+                    }, function (err) {
+                        res.status(400).send({ error: err.message });
+                    });
+                }
+            }
+        });
+    });
+
+apiRouter.route('/:site/:id')
+    .delete(function (req, res) {
+        var id = req.params.id;
+        db.User.find({'email': req.user[0].email}).exec(function (err, results) {
+            var user = results[0];
+            if (err) {
+                res.send(400, err);
+            } else {
+                if (user) {
+                    user.sites.id(id).remove();
+                    user.save(function (err, result) {
+                        if (err) {
+                            res.send(400, err);
+                        } else {
+                            res.send(204);
+                        }
+                    });
+
+                } else {
+                    res.send(400, 'Invalid request');
+                }
+            }
+        });
+    });
+
+apiRouter.route('/:site/:sport')
+    .get(function (req, res) {
+        db.User.find({'email': req.user[0].email, 'sites.name': req.params.site}).exec(function (err, results) {
+            var user = cleanUser(results[0]);
+            if (err) {
+                res.send(400, err);
+            } else {
+                if (user) {
+                    var teams = [];
+
+                    // Combine all football teams
+                    user.sites.forEach(function (site) {
+                        if (site.name === req.params.site) {
+                            site.sports.forEach(function (sport) {
+                                if (sport.name === req.params.sport) {
+                                    teams = teams.concat(sport.teams);
+                                }
+                            });
+                        }
+                    });
+
+                    res.json({
+                        teams: teams
+                    });
+                } else {
+                    res.send(400);
+                }
+            }
+        });
+    });
+
+
+
 app.use(apiRouter);
 
-app.listen(PORT, function () {
+server.listen(PORT, function () {
     console.log('Server started on ' + PORT);
 });
+
+/**
+ * Removes any confidential information from user object.
+ * @param user
+ * @returns {*}
+ */
+function cleanUser(user) {
+    user.passwordHash = undefined;
+    user.sites.forEach(function (site) {
+        site.username = undefined;
+        site.password = undefined;
+    });
+    return user;
+}
 
 // TODO find a better solution for doing timers
 function updateNews() {
@@ -203,3 +514,14 @@ function updateNews() {
     });
 }
 setTimeout(updateNews, 1000);
+
+function updateScoreboards() {
+    scoreboardWorker.processBoards().then(function (data) {
+        console.log('Updated scoreboards');
+        setTimeout(updateScoreboards, 10000);
+    }, function (err) {
+        console.log('Updated scoreboards');
+        setTimeout(updateScoreboards, 10000);
+    });
+}
+setTimeout(updateScoreboards, 1000);

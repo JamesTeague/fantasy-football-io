@@ -1,97 +1,48 @@
 fantasy-football-io
 ===================
 
-This is an API that scrapes ESPN fantasy football site.
+This is a Fantasy Football API that is used to scrape fantasy football news, leagues and player information. Please only use for testing purposes.
 
-###Run Server
+The fantasy news sites it supports are
+- ESPN
+- Yahoo
+- CBS Sports
+- Rotoworld
+- USA Today
+
+You can also import your fantasy football leagues and have live scoring for each.
+- ESPN
+- Yahoo (partial)
+
+### Install
+```bash
+npm install
+bower install
+```
+
+### Requirements
+* Redis
+* MongoDB
+
+Create a mongo database "fantasy-football".
+
+### Set Environment Variables
+Create and modify .env file in root directory.
+
+```
+MONGOLAB_URI=mongodb://localhost:27017/fantasy-football
+REDIS_SESSION_HOST=localhost
+REDIS_SESSION_PORT=6379
+REDIS_SESSOIN_PASS=''
+```
+
+### Run Server
 ```bash
 node app.js
 ```
 
-###Test API
-To get your league information simply POST to http://localhost:8080/espn with
+By default application will be running on http://localhost:8080
 
-```json
-{
-  "username":"yourname",
-  "password":"yourpassword"
-}
-```
-Example response
-```json
-[
-    {
-        "url": "http://games.espn.go.com/ffl/clubhouse?leagueId=765690&teamId=8&seasonId=2013",
-        "name": "What would Jones-Drew?",
-        "record": "8-5",
-        "shortName": "COOL",
-        "rank": "1st",
-        "players": [
-            {
-                "playerName": "Peyton Manning",
-                "playerTeamName": "Den QB",
-                "position": "QB",
-                "positionRank": "1",
-                "totalPoints": "410",
-                "averagePoints": "25.6"
-            },
-            {
-                "playerName": "Maurice Jones-Drew",
-                "playerTeamName": "Oak RB",
-                "position": "RB",
-                "positionRank": "19",
-                "totalPoints": "187",
-                "averagePoints": "11.7"
-            },
-            {
-                "playerName": "Steven Jackson",
-                "playerTeamName": "Atl RB",
-                "position": "RB",
-                "positionRank": "29",
-                "totalPoints": "148.3",
-                "averagePoints": "9.3"
-            },
-            {
-                "playerName": "Greg Jennings",
-                "playerTeamName": "Min WR",
-                "position": "RB/WR",
-                "positionRank": "34",
-                "totalPoints": "172.4",
-                "averagePoints": "10.8"
-            },
-            {
-                "playerName": "Jordy Nelson",
-                "playerTeamName": "GB WR",
-                "position": "WR",
-                "positionRank": "13",
-                "totalPoints": "264.4",
-                "averagePoints": "16.5"
-            },
-            {
-                "playerName": "Harry Douglas",
-                "playerTeamName": "Atl WR",
-                "position": "WR",
-                "positionRank": "24",
-                "totalPoints": "199.7",
-                "averagePoints": "12.5"
-            },
-            {
-                "playerName": "Julius Thomas",
-                "playerTeamName": "Den TE",
-                "position": "TE",
-                "positionRank": "3",
-                "totalPoints": "215.8",
-                "averagePoints": "13.5"
-            },
-            {
-                "playerName": "Seahawks D/ST",
-                "playerTeamName": "D/ST",
-                "position": "D/ST",
-                "positionRank": "1",
-                "totalPoints": "195",
-                "averagePoints": "12.2"
-            }
-        ]
-    }
-]
-```
+To import teams, you will need to signup for an account and login. After logging in, click profile picture and goto account setting where you can add accounts from ESPN and Yahoo.
+
+Best of luck!

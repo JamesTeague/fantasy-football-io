@@ -8,7 +8,8 @@ var should = require('should');
 var request = supertest('localhost:8080');
 var app = require('../app');
 
-var espnCredentials = require('../../fantasyCredentials.json');
+var espnCredentials = require('../../fantasyCredentials.json').espn;
+var yahooCredentials = require('../../fantasyCredentials.json').yahoo;
 
 var connectionUrl = 'mongodb://127.0.0.1:27017/fantasy-football';
 before('should clean database', function (done) {
@@ -19,7 +20,6 @@ before('should clean database', function (done) {
         db.dropDatabase(function (err, result) {
             done();
         });
-
     });
 });
 
@@ -40,7 +40,7 @@ describe('Fantasy Football IO API Test', function () {
     describe('User API', function (done) {
         it('should add valid user', function (done) {
             var validUserInfo = {
-                email: 'test@asdf.com',
+                email: 'vbudhram@gmail.com',
                 password: 'password'
             };
 
@@ -72,25 +72,64 @@ describe('Fantasy Football IO API Test', function () {
                 });
         });
 
-//        it('should get user', function (done) {
-//            var userInfo = {
-//                email: 'testEmail@asdf.com'
-//            };
-//
-//            request.get('/users')
-//                .expect('Content-Type', /json/)
-//                .expect(200)
-//                .send(userInfo)
-//                .end(function (err, res) {
-//                    if (err) {
-//                        done(err);
-//                    } else {
-//                        var result = res.body;
-//                        result.email.should.equal(userInfo.email);
-//                        done();
-//                    }
-//                });
-//        });
+        describe('should get logged in user information', function () {
+            var request = require('supertest');
+            var agent = request.agent('localhost:8080');
+
+            before('should add user', function (done) {
+
+                var validUserInfo = {
+                    email: 'vbudhram2@gmail.com',
+                    password: 'password'
+                };
+
+                agent.post('/users')
+                    .expect('Content-Type', /json/)
+                    .expect(200)
+                    .send(validUserInfo)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            it('should login', function (done) {
+                var validUserInfo = {
+                    email: 'vbudhram2@gmail.com',
+                    password: 'password'
+                };
+
+                agent.post('/doLogin')
+                    .send(validUserInfo)
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            it('should get user', function (done) {
+                agent.get('/users')
+                    .expect('Content-Type', /json/)
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            var result = res.body;
+                            result.should.not.be.null;
+                            done();
+                        }
+                    });
+            });
+        });
+
     });
 
     describe('News API', function () {
@@ -120,8 +159,8 @@ describe('Fantasy Football IO API Test', function () {
         });
     });
 
-    describe('Team API', function () {
-        it('should reject add espn team information for unauthorized users', function (done) {
+    describe('Site API', function () {
+        it('should reject add espn site information for unauthorized users', function (done) {
             request.post('/espn')
                 .send(espnCredentials)
                 .expect(403)
@@ -130,13 +169,13 @@ describe('Fantasy Football IO API Test', function () {
                 });
         });
 
-        describe('should add espn team information for users', function () {
+        describe('should add espn site information for users', function () {
             var request = require('supertest');
             var agent = request.agent('localhost:8080');
 
             before('should login', function (done) {
                 var validUserInfo = {
-                    email: 'test@asdf.com',
+                    email: 'vbudhram@gmail.com',
                     password: 'password'
                 };
 
@@ -152,7 +191,7 @@ describe('Fantasy Football IO API Test', function () {
                     });
             });
 
-            it('should add espn team information for users', function (done) {
+            it('should add espn user information for users', function (done) {
                 agent.post('/espn')
                     .send(espnCredentials)
                     .expect(200)
@@ -164,6 +203,263 @@ describe('Fantasy Football IO API Test', function () {
                         }
                     });
             });
+
+            it('should get espn site information', function (done) {
+                agent.get('/espn')
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            it('should get espn football information', function (done) {
+                agent.get('/espn/football')
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            it('should add another espn account', function (done) {
+                agent.post('/espn')
+                    .send(espnCredentials)
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            it('should reject invalid account', function (done) {
+                agent.post('/espn')
+                    .send({username: 'asdf', password: 'asdf'})
+                    .expect(400)
+                    .end(function (err, res) {
+                        console.log(res.body);
+                        done();
+                    });
+            });
+
+            it('should add yahoo account', function (done) {
+                agent.post('/yahoo')
+                    .send(yahooCredentials)
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            console.log(res.body);
+                            done();
+                        }
+                    });
+            });
+
+            it('should get yahoo football information', function (done) {
+                agent.get('/yahoo/football')
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+        });
+
+        describe('should remove espn site from account', function () {
+            var request = require('supertest');
+            var agent = request.agent('localhost:8080');
+
+            var validUserInfo = {
+                email: 'remove@gmail.com',
+                password: 'password'
+            };
+
+            before('should add user', function (done) {
+                agent.post('/users')
+                    .expect('Content-Type', /json/)
+                    .expect(200)
+                    .send(validUserInfo)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            user = res.body;
+                            done();
+                        }
+                    });
+            });
+
+            before('should login', function (done) {
+                agent.post('/doLogin')
+                    .send(validUserInfo)
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            it('should add espn site to account', function (done) {
+                agent.post('/espn')
+                    .send(espnCredentials)
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            var user;
+            it('should get user', function (done) {
+                agent.get('/users')
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            user = res.body;
+                            done();
+                        }
+                    });
+            });
+
+
+            it('should remove espn site from account', function (done) {
+                agent.delete('/espn/' + user.sites[0]._id)
+                    .expect(204)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            done();
+                        }
+                    });
+            });
+
+            it('should have user sites for user', function (done) {
+                agent.get('/users')
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            done(err);
+                        } else {
+                            res.body.sites.length.should.equal(0);
+                            done();
+                        }
+                    });
+            });
+        });
+    });
+
+    describe('Scoreboard API', function () {
+        var request = require('supertest');
+        var agent = request.agent('localhost:8080');
+
+        var validUserInfo = {
+            email: 'score@gmail.com',
+            password: 'password'
+        };
+
+        before('should add user', function (done) {
+            agent.post('/users')
+                .expect('Content-Type', /json/)
+                .expect(200)
+                .send(validUserInfo)
+                .end(function (err, res) {
+                    if (err) {
+                        done(err);
+                    } else {
+                        done();
+                    }
+                });
+        });
+
+        it('should login', function (done) {
+            agent.post('/doLogin')
+                .send(validUserInfo)
+                .expect(200)
+                .end(function (err, res) {
+                    if (err) {
+                        done(err);
+                    } else {
+                        done();
+                    }
+                });
+        });
+
+        it('should add espn user information for user', function (done) {
+            agent.post('/espn')
+                .send(espnCredentials)
+                .expect(200)
+                .end(function (err, res) {
+                    if (err) {
+                        done(err);
+                    } else {
+                        done();
+                    }
+                });
+        });
+
+        it('should add espn scoreboards for user leagues', function (done) {
+            agent.post('/scoreboard/espn/football')
+                .expect(200)
+                .end(function (err, res) {
+                    done();
+                });
+        });
+
+        it('should add yahoo user information for user', function (done) {
+            agent.post('/yahoo')
+                .send(yahooCredentials)
+                .expect(200)
+                .end(function (err, res) {
+                    if (err) {
+                        done(err);
+                    } else {
+                        res.should.not.be.null;
+                        done();
+                    }
+                });
+        });
+
+        it('should add yahoo scoreboards for user leagues', function (done) {
+            agent.post('/scoreboard/yahoo/football')
+                .expect(200)
+                .end(function (err, res) {
+                    if(err){
+                        done(err);;
+                    }else{
+                        res.should.not.be.null;
+                        done();
+                    }
+                });
+        });
+
+        it('should add all scoreboards for user leagues', function (done) {
+            agent.get('/scoreboards')
+                .expect(200)
+                .end(function (err, res) {
+                    done();
+                });
         });
     });
 });

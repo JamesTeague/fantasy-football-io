@@ -31,16 +31,17 @@ app.controller('NewsCtrl', ['$scope', '$http', function ($scope, $http) {
             }
             case 'CBS Sports Football':
             {
-                return 'https://pbs.twimg.com/profile_images/469871112155717632/AkhCJbjZ_400x400.png';
+                return 'https://lh4.googleusercontent.com/-4NvKeBokrtE/AAAAAAAAAAI/AAAAAAABIwI/6HLa29Ztp1Y/s120-c/photo.jpg';
             }
             case 'USA Today Football':
             {
                 return 'https://lh5.googleusercontent.com/-ZaYfYmjUUjA/AAAAAAAAAAI/AAAAAAAAIQs/Ydunp8tRLrg/s120-c/photo.jpg';
             }
-            default:
-            {
-                return '';
-            }
         }
     };
+
+    $scope.getMediaImageSrc = function(article){
+        return article.mediaUrl;
+    };
+
 }]);

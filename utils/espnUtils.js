@@ -2,6 +2,8 @@
  * Functions that scrape fantasy football information from the espn team website.
  *
  * Created by vijay.budhram on 7/11/14.
+ * 
+ * Edited by JamesTeague on 9/13/16
  */
 (function () {
     'use strict';
@@ -9,10 +11,13 @@
     var q = require('q');
     var cheerio = require('cheerio');
     var request = require('request');
+    var async = require('async');
     var Team = require('../models/Team');
     var Player = require('../models/Player');
-    var LOGIN_URL = 'https://r.espn.go.com/members/util/loginUser';
-    var FRONTPAGE_URL = 'http://games.espn.go.com/frontpage/';
+    var LOGIN_URL = 'https://espn.go.com/login/';
+    var FRONTPAGE_URL = 'http://espn.com/fantasy/';
+    var PLAYER_STATS_URL = 'http://games.espn.com/ffl/tools/projections/';
+    var DOMAIN_URL = 'http://espn.com';
 
     function login(username, password) {
         console.log('Logging into ESPN with username/password = ' + username + '/*****');
@@ -80,51 +85,127 @@
             if (err) {
                 getTeamQ.reject(err);
             } else {
-                var $ = cheerio.load(body);
+                try {
+                    var $ = cheerio.load(body);
 
-                var nameTokens = $('h3').filter('.team-name');
-                if (nameTokens.length < 1) {
-                    getTeamQ.reject(new Error('Unsupported team url : ' + teamUrl));
-                } else {
-                    // Scrape team player information
-                    var players = [];
-                    var playerCells = $('.pncPlayerRow');
-                    for (var i = 0; i < playerCells.length; i++) {
-                        var cell = playerCells[i];
+                    var nameTokens = $('h3').filter('.team-name');
+                    if (nameTokens.length < 1) {
+                        getTeamQ.reject(new Error('Unsupported team url : ' + teamUrl));
+                    } else {
+                        // Scrape team player information
+                        var players = [];
+                        var playerCells = $('.pncPlayerRow');
+                        var active = false;
+                        for (var i = 0; i < playerCells.length; i++) {
+                            try {
+                                var cell = playerCells[i];
 
-                        // Don't add empty players
-                        if (cell.children[1].children[0].children === undefined) {
-                            continue;
+                                // Don't add empty players
+                                if (cell.children[1].children[0].children === undefined) {
+                                    continue;
+                                }
+
+                                var playerName = cell.children[1].children[0].children[0].data;
+                                var playerTokens = cell.children[1].children[1].data.replace(',', "").replace('*', "").trim().split(/[^\u000A\u0020-\u007E]/g);
+                                var playerTeamName = playerTokens[0];
+                                var position = playerTokens[1];
+
+                                if (teamUrl.indexOf('2016') > -1) {
+                                    // TODO Figure this out later, not sure how to handle current year, point and rankings
+                                    var slot = cell.children[0].children[0].data;
+
+                                    var opponent;
+                                    try {
+                                        opponent = cell.children[4].children[0].children[0].children[0].data;
+                                    } catch (e) {
+                                        opponent = '';
+                                    }
+
+                                    var projectedPoints = 0;
+                                    try {
+                                        projectedPoints = cell.children[12].children[0].data;
+                                        if (projectedPoints === '--') {
+                                            projectedPoints = 0;
+                                        }
+                                    } catch (e) {
+                                    }
+
+                                    var previousPoints = 0;
+                                    try {
+                                        previousPoints = cell.children[10].children[0].data;
+                                        if (previousPoints === '--') {
+                                            previousPoints = 0;
+                                        }
+                                    } catch (e) {
+                                    }
+
+                                    var averagePoints = 0;
+                                    try {
+                                        averagePoints = cell.children[9].children[0].data;
+                                        if (averagePoints === '--') {
+                                            averagePoints = 0;
+                                        }
+                                    } catch (e) {
+                                    }
+
+                                    var playerId = cell.children[1].children[0].attribs.playerid;
+                                    var playerImage = 'http://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/' + playerId + '.png&w=200&h=145';
+
+                                    var player = {
+                                        position: position,
+                                        playerName: playerName,
+                                        playerTeamName: playerTeamName,
+                                        opponent: opponent,
+                                        averagePoints: averagePoints,
+                                        previousPoints: previousPoints,
+                                        projectedPoints: projectedPoints,
+                                        playerImage: playerImage
+                                    };
+
+                                    players.push(player);
+                                    active = true;
+                                } else {
+                                    // ESPN has different layouts for previous years
+                                    var positionRank = cell.children[3].children[0].data;
+                                    var totalPoints = cell.children[4].children[0].data;
+                                    var averagePoints = cell.children[5].children[0].data;
+                                    players.push(new Player(playerName, playerTeamName, position, positionRank, totalPoints, averagePoints));
+                                }
+                            } catch (err) {
+                                console.log('Failed parsing player : ' + playerName);
+                                console.log(err.stack);
+                            }
                         }
-                        var playerName = cell.children[1].children[0].children[0].data;
+                        // Scrape team information
+                        var teamName = nameTokens[0].children[0].data.trim();
+                        var shortName = nameTokens[0].children[1].children[0].data;
+                        shortName = (shortName ? shortName : '').replace('(', '').replace(')', '');
+                        var record = $('.games-univ-mod4')[0].children[0].children[1].data.trim();
+                        var rank = $('.games-univ-mod4')[0].children[0].children[2].children[0].data.replace('(', '').replace(')', '');
+                        var teamImageUrl = $('#content > div:nth-child(1) > div.gamesmain.container > div > div > div:nth-child(3) > div.games-topcol.games-topcol-expand > div.games-univ-mod1 > a > img')[0].attribs.src;
+                        var leagueName = $('#content > div:nth-child(1) > div.gamesmain.container > div > div > div:nth-child(3) > div.games-topcol.games-topcol-expand > div:nth-child(2) > div.games-univ-mod3 > ul:nth-child(2) > li > a > strong')[0].children[0].data;
 
-                        var position = cell.children[0].children[0].data;
-                        var playerTeamName = cell.children[1].children[1].data.replace(',', "").trim();
+                        var tokens = teamUrl.replace('clubhouse', 'scoreboard').split('&');
+                        var scoreboardUrl = tokens[0] + '&' + tokens[2];
+                        console.log('Resolving team data for ' + teamUrl);
 
-                        if(teamUrl.indexOf('2014')){
-                            // TODO Figure this out later, not sure how to handle current year, point and rankings
-                            players.push(new Player(playerName, playerTeamName, position, undefined, undefined, undefined));
-                        }else{
-                            // ESPN has different layouts for previous years
-                            var positionRank = cell.children[3].children[0].data;
-                            var totalPoints = cell.children[4].children[0].data;
-                            var averagePoints = cell.children[5].children[0].data;
-                            players.push(new Player(playerName, playerTeamName, position, positionRank, totalPoints, averagePoints));
-                        }
+                        var team = {
+                            active: active,
+                            name: teamName,
+                            shortName: shortName,
+                            record: record,
+                            rank: rank,
+                            teamUrl: teamUrl,
+                            teamImageUrl: teamImageUrl,
+                            leagueName: leagueName,
+                            leagueScoreboardUrl: scoreboardUrl,
+                            players: players
+                        };
+
+                        getTeamQ.resolve(team);
                     }
-
-                    // Scrape team information
-                    var teamName = nameTokens[0].children[0].data.trim();
-                    var shortName = nameTokens[0].children[1].children[0].data;
-                    shortName = (shortName ? shortName : '').replace('(', '').replace(')', '');
-                    var record = $('.games-univ-mod4')[0].children[0].children[1].data.trim();
-                    var rank = $('.games-univ-mod4')[0].children[0].children[2].children[0].data.replace('(', '').replace(')', '');
-                    var teamImageUrl = $('#content > div:nth-child(1) > div.gamesmain.container > div > div > div:nth-child(3) > div.games-topcol.games-topcol-expand > div.games-univ-mod1 > a > img')[0].attribs.src;
-
-                    console.log('Resolving team data for ' + teamUrl);
-                    var team = new Team(teamName, shortName, record, rank, teamUrl, teamImageUrl, players);
-
-                    getTeamQ.resolve(team);
+                } catch (err) {
+                    getTeamQ.reject(err);
                 }
             }
         });
@@ -157,12 +238,19 @@
                     var link = links[i];
                     // Check to see if this is a news article
                     if (link.attribs.href && link.attribs.href.indexOf('/fantasy/football/story') > -1) {
-                        newsArticles.push({
-                            title: link.children[0].data,
-                            url: link.attribs.href,
-                            date: new Date(),
-                            source: 'ESPN Football'
+                        var article = newsArticles.filter(function(obj){
+                            if(obj.url == link.attribs.href)
+                                return obj;
                         });
+                        if(!article.length){
+                            newsArticles.push({
+                                title: findLinkTitle(link),
+                                url: DOMAIN_URL+link.attribs.href,
+                                date: new Date(),
+                                source: 'ESPN Football'
+                            });
+                        }
+                        
                     }
                 }
 
@@ -173,8 +261,261 @@
         return getNewsQ.promise;
     }
 
+
+
+    function findTitle(child) {
+        if(child.type == "text"){
+          return child;
+        }
+        else if (child.children != null){
+          var i;
+          var result = null;
+          for(var i=0; result == null && i < child.children.length; i++){
+               result = findTitle(child.children[i]);
+          }
+          return result;
+     }
+     return null;
+    }
+
+    function findLinkTitle(link) {
+        for(var i=0; i < link.children.length; i++){
+            var child = findTitle(link.children[i]);
+            if(child != null) return child.data;
+        }
+        try{
+            if(link.parent.children[2].children[0].children[1].children[0].children[0].data){
+                return link.parent.children[2].children[0].children[1].children[0].children[0].data
+            }
+        }
+        catch(err) {
+            return parseTitle(link.attribs.href);
+        }
+    }
+
+    function parseTitle(url) {
+        var pieces = url.split('/');
+        return titleCase(pieces[pieces.length-1].replace(/-/g, " "));
+    }
+
+    function titleCase(str) {
+        var splitStr = str.toLowerCase().split(' ');
+        for (var i = 0; i < splitStr.length; i++) {
+            splitStr[i] = splitStr[i].charAt(0).toUpperCase() + splitStr[i].substring(1);     
+        }
+        return splitStr.join(' '); 
+    }
+
+    function getScoreboards(user, crytoUtils) {
+        var deferred = q.defer();
+
+        var scoreboards = [];
+        var loginDefers = [];
+        user.sites.forEach(function (site) {
+            if (site.name === 'espn') {
+                var username = crytoUtils.decrypt(site.username);
+                var password = crytoUtils.decrypt(site.password);
+                loginDefers.push(login(username, password));
+            }
+        });
+
+        q.all(loginDefers).then(function (loginResults) {
+            var defers = [];
+            for (var i = 0; i < loginResults.length; i++) {
+                var cookieJar = loginResults[i].cookieJar;
+                var site = user.sites[i];
+
+                site.sports[0].teams.forEach(function (team) {
+                    var url = team.leagueScoreboardUrl;
+                    defers.push(getScoreboard(url, cookieJar));
+                });
+            }
+
+            q.allSettled(defers).done(function (results) {
+                results.forEach(function (result) {
+                    if (result.state === 'fulfilled') {
+                        scoreboards = scoreboards.concat(result.value);
+                    }
+                });
+                deferred.resolve(scoreboards);
+            });
+
+        }, function (err) {
+            deferred.reject(err);
+        });
+
+        return deferred.promise;
+    }
+
+    function getScoreboard(url, cookieJar) {
+        console.log('Getting ESPN scoreboard for ' + url);
+
+        var deferred = q.defer();
+
+        var request = require('request');
+        var cheerio = require('cheerio');
+
+        // Get team page and extract name, record, and players
+        var scoreboardOptions = {
+            url: url,
+            method: 'GET',
+            jar: cookieJar,
+            followAllRedirects: true
+        };
+        request(scoreboardOptions, function (err, res, body) {
+            if (err) {
+                deferred.reject(err);
+            } else {
+
+                try {
+                    var $ = cheerio.load(body);
+                    var teams = [];
+                    var names = $('.name');
+                    for (var i = 0; i < names.length; i++) {
+                        var name = names[i].children[0].children[0].data;
+                        if (teams[i] === undefined) {
+                            teams[i] = {};
+                        }
+
+                        teams[i].name = name;
+                    }
+
+                    var scores = $('.score');
+                    var records = $('.record');
+                    for (var i = 0; i < scores.length; i++) {
+                        var score = scores[i].children[0].data;
+                        var record = records[i].children[0].data;
+                        teams[i].score = score;
+                        teams[i].record = record;
+                    }
+
+                    try {
+                        var plays = $('.playersPlayed');
+                        for (var i = 0; i < plays.length; i++) {
+                            var ytp = plays[i].children[0].children[0].data;
+                            var ip = plays[i].children[1].children[0].data;
+                            var proj = plays[i].children[3].children[0].data;
+                            teams[i].yetToPlay = ytp;
+                            teams[i].inPlay = ip;
+                            teams[i].projected = proj;
+                        }
+                    } catch (e) {
+                        console.log(e);
+                    }
+
+                    var matchupCount = teams.length / 2;
+                    var games = [];
+                    var teamIndex = 0;
+                    for (var i = 0; i < matchupCount; i++) {
+                        games[i] = {
+                            homeTeam: [teams[teamIndex]],
+                            awayTeam: [teams[teamIndex + 1]]
+                        };
+
+                        teamIndex = teamIndex + 2;
+                    }
+
+                    var scoreboardName = $('#content > div:nth-child(1) > div.gamesmain.container > div > div > div.games-fullcol.games-fullcol-extramargin > div.games-pageheader > div:nth-child(2) > h1')[0].children[0].data;
+                    var scoreboard = {
+                        name: scoreboardName,
+                        type: 'football',
+                        site: 'espn',
+                        url: url,
+                        games: games
+                    };
+
+                    deferred.resolve(scoreboard);
+
+                } catch (err) {
+                    deferred.reject(err);
+                }
+            }
+        });
+
+        return deferred.promise;
+    }
+
+    function getProjectedPlayerStats() {
+        var resultQ = q.defer();
+
+        var defers = [];
+        var request = require('request');
+        var cheerio = require('cheerio');
+
+        var urls = [];
+        for (var i = 0; i < 1000; i = i + 40) {
+            var url = PLAYER_STATS_URL + '?startIndex=' + i;
+            console.log('Getting ESPN player stats for ' + url);
+            urls.push(url);
+        }
+
+        var playerStats = []
+        async.eachSeries(urls, function(url, cb){
+            var statsOptions = {
+                url: url,
+                method: 'GET',
+                followAllRedirects: true
+            };
+
+            request(statsOptions, function (err, res, body) {
+                if (err) {
+                   cb(err);
+                } else {
+                    var $ = cheerio.load(body);
+                    var players = $('.playertablePlayerName');
+
+                    for (var i = 0; i < players.length; i++) {
+                        var player = players[i];
+
+                        var playerStat = {};
+                        playerStat.name = player.children[0].children[0].data;
+
+                        try {
+                            playerStat.position = player.children[0].next.data.replace(',', "").replace('*', "").trim().split(/[^\u000A\u0020-\u007E]/g)[1];
+                            playerStat.team = player.children[0].next.data.replace(',', "").replace('*', "").trim().split(/[^\u000A\u0020-\u007E]/g)[0];
+                            playerStat.opponent = player.next.children[0].children[0].children[0].data.replace('@', '');
+                        } catch (e) {
+                            console.log('Failed parsing : ' + playerStat.name);
+                            playerStat.opponent = '';
+                        }
+                        playerStat.week = (new Date()).toISOString();
+                        playerStat.site = 'espn';
+
+                        try {
+                            var stat = {};
+                            stat.pa_yard = player.next.next.next.next.children[0].data;
+                            stat.pa_ca = player.next.next.next.children[0].data;
+                            stat.pa_td = player.next.next.next.next.next.children[0].data;
+                            stat.pa_int = player.next.next.next.next.next.next.children[0].data;
+                            stat.ru_att = player.next.next.next.next.next.next.next.children[0].data;
+                            stat.ru_td = player.next.next.next.next.next.next.next.next.children[0].data;
+                            stat.ru_yard = player.next.next.next.next.next.next.next.next.next.children[0].data;
+                            stat.re_att = player.next.next.next.next.next.next.next.next.next.next.children[0].data;
+                            stat.re_td = player.next.next.next.next.next.next.next.next.next.next.next.children[0].data;
+                            stat.re_yar = player.next.next.next.next.next.next.next.next.next.next.next.next.children[0].data;
+                            playerStat.stat = [stat];
+                            playerStats.push(playerStat);
+                        } catch (e) {
+                            console.log('Error parsing player stat at index ' + playerStat.name);
+                        }
+                    }
+
+                    cb();
+                }
+            });
+        }, function(err) {
+            resultQ.resolve(playerStats);
+        });
+
+        return resultQ.promise;
+    }
+
     module.exports = {
+        login: login,
         getHeadlines: getHeadlines,
+        getScoreboards: getScoreboards,
+        getScoreboard: getScoreboard,
+        getProjectedPlayerStats: getProjectedPlayerStats,
         getTeams: function (username, password) {
             var resultQ = q.defer();
 
@@ -193,6 +534,11 @@
                     if (teamLink.attribs.href !== undefined && teamLink.attribs.href.indexOf('teamId') > -1) {
                         promises.push(getTeam(teamLink.attribs.href, data.cookieJar));
                     }
+                }
+
+                // If no teams were found, don't add to account
+                if (promises.length < 1) {
+                    resultQ.reject(new Error('No teams found in this account.'));
                 }
 
                 q.allSettled(promises).done(function (results) {
@@ -215,4 +561,3 @@
         }
     };
 }());
-
