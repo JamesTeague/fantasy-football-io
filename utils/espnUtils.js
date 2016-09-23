@@ -2,6 +2,8 @@
  * Functions that scrape fantasy football information from the espn team website.
  *
  * Created by vijay.budhram on 7/11/14.
+ * 
+ * Edited by JamesTeague on 9/13/16
  */
 (function () {
     'use strict';
@@ -12,9 +14,10 @@
     var async = require('async');
     var Team = require('../models/Team');
     var Player = require('../models/Player');
-    var LOGIN_URL = 'https://r.espn.go.com/members/util/loginUser';
-    var FRONTPAGE_URL = 'http://games.espn.go.com/frontpage/';
-    var PLAYER_STATS_URL = 'http://games.espn.go.com/ffl/tools/projections';
+    var LOGIN_URL = 'https://espn.go.com/login/';
+    var FRONTPAGE_URL = 'http://espn.com/fantasy/';
+    var PLAYER_STATS_URL = 'http://games.espn.com/ffl/tools/projections/';
+    var DOMAIN_URL = 'http://espn.com';
 
     function login(username, password) {
         console.log('Logging into ESPN with username/password = ' + username + '/*****');
@@ -107,7 +110,7 @@
                                 var playerTeamName = playerTokens[0];
                                 var position = playerTokens[1];
 
-                                if (teamUrl.indexOf('2014') > -1) {
+                                if (teamUrl.indexOf('2016') > -1) {
                                     // TODO Figure this out later, not sure how to handle current year, point and rankings
                                     var slot = cell.children[0].children[0].data;
 
@@ -235,12 +238,19 @@
                     var link = links[i];
                     // Check to see if this is a news article
                     if (link.attribs.href && link.attribs.href.indexOf('/fantasy/football/story') > -1) {
-                        newsArticles.push({
-                            title: link.children[0].data,
-                            url: link.attribs.href,
-                            date: new Date(),
-                            source: 'ESPN Football'
+                        var article = newsArticles.filter(function(obj){
+                            if(obj.url == link.attribs.href)
+                                return obj;
                         });
+                        if(!article.length){
+                            newsArticles.push({
+                                title: findLinkTitle(link),
+                                url: DOMAIN_URL+link.attribs.href,
+                                date: new Date(),
+                                source: 'ESPN Football'
+                            });
+                        }
+                        
                     }
                 }
 
@@ -249,6 +259,51 @@
         });
 
         return getNewsQ.promise;
+    }
+
+
+
+    function findTitle(child) {
+        if(child.type == "text"){
+          return child;
+        }
+        else if (child.children != null){
+          var i;
+          var result = null;
+          for(var i=0; result == null && i < child.children.length; i++){
+               result = findTitle(child.children[i]);
+          }
+          return result;
+     }
+     return null;
+    }
+
+    function findLinkTitle(link) {
+        for(var i=0; i < link.children.length; i++){
+            var child = findTitle(link.children[i]);
+            if(child != null) return child.data;
+        }
+        try{
+            if(link.parent.children[2].children[0].children[1].children[0].children[0].data){
+                return link.parent.children[2].children[0].children[1].children[0].children[0].data
+            }
+        }
+        catch(err) {
+            return parseTitle(link.attribs.href);
+        }
+    }
+
+    function parseTitle(url) {
+        var pieces = url.split('/');
+        return titleCase(pieces[pieces.length-1].replace(/-/g, " "));
+    }
+
+    function titleCase(str) {
+        var splitStr = str.toLowerCase().split(' ');
+        for (var i = 0; i < splitStr.length; i++) {
+            splitStr[i] = splitStr[i].charAt(0).toUpperCase() + splitStr[i].substring(1);     
+        }
+        return splitStr.join(' '); 
     }
 
     function getScoreboards(user, crytoUtils) {
