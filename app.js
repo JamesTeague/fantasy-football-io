@@ -4,6 +4,8 @@
 
 'use strict';
 
+var dotenv = require('dotenv').config();
+
 //  Static variables
 var env = process.env.NODE_ENV || 'development';
 if (env === 'production' || env === 'staging') {
@@ -22,7 +24,6 @@ var sessionSecret = process.env.SECRET || 'keyboardcat';
 var redisSessionHost = process.env.REDIS_SESSION_HOST || 'localhost';
 var redisSessionPort = process.env.REDIS_SESSION_PORT || 6379;
 var redisSessionPass = process.env.REDIS_SESSION_PASS;
-
 
 // Libaries
 var q = require('q');
@@ -202,7 +203,6 @@ apiRouter.route('/users', auth)
                 } else {
                     res.send(400, 'Invalid request');
                 }
-
             }
         }, function (err) {
             res.send(400, err);
