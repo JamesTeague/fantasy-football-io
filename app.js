@@ -4,23 +4,26 @@
 
 'use strict';
 
-var dotenv = require('dotenv').config();
-
 //  Static variables
+var env = process.env.NODE_ENV || 'development';
+if (env === 'production' || env === 'staging') {
+    require('newrelic');
+}
+else {
+    require('dotenv').config();
+}
+
 var HOST = process.env.HOST || 'localhost';
 var PORT = process.env.PORT || 8080;
 var APP_NAME = 'fantasy-football-io';
 var DB_URL = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || 'localhost:27017/fantasy-football';
-var env = process.env.NODE_ENV || 'development';
 var salt = process.env.SALT || 'badSalt';
 var sessionSecret = process.env.SECRET || 'keyboardcat';
 var redisSessionHost = process.env.REDIS_SESSION_HOST || 'localhost';
 var redisSessionPort = process.env.REDIS_SESSION_PORT || 6379;
 var redisSessionPass = process.env.REDIS_SESSION_PASS;
 
-if (env === 'production' || env === 'staging') {
-    require('newrelic');
-}
+
 // Libaries
 var q = require('q');
 
