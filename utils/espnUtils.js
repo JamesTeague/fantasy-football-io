@@ -261,8 +261,6 @@
         return getNewsQ.promise;
     }
 
-
-
     function findTitle(child) {
         if(child.type == "text"){
           return child;
