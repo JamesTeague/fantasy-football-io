@@ -4,8 +4,6 @@
 
 'use strict';
 
-var dotenv = require('dotenv').config();
-
 //  Static variables
 var env = process.env.NODE_ENV || 'development';
 if (env === 'production' || env === 'staging') {
