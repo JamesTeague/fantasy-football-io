@@ -19,14 +19,14 @@
     "angular-cookies": "1.2.21",
     "angular-bootstrap": "0.11.0",
     "angular-ui-router": "0.2.10",
-    "bootstrap": "3.2.0",
+    "bootstrap": "3.3.7",
     "font-awesome": "4.2.0",
     "angulartics": "0.16.4",
     "angular-loading-bar": "0.5.1",
     "angular-animate": "1.2.23",
     "angular-md5": "0.1.7",
     "socket.io-client": "1.1.0",
-    "bootstrap-material-design": "^4.0.2"
+    "bootstrap-material-design": "0.5.10"
   },
   "resolutions": {
     "angular": "1.2.21",
