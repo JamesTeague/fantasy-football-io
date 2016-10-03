@@ -35,7 +35,7 @@
     "dotenv": "*",
     "ejs": "^1.0.0",
     "express": "^4.8.2",
-    "express-session": "^1.8.1",
+    "express-session": "^1.14.1",
     "good": "^2.2.0",
     "gulp": "~3.9.0",
     "gulp-less": "~3.1.0",

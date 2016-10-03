@@ -63,9 +63,9 @@ var app = express();
 app.use(morgan('combined'));
 app.use(cookieParser());
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(flash());
-app.use(session({store: redisStore, secret: sessionSecret}));
+app.use(session({store: redisStore, secret: sessionSecret, resave: false, saveUninitialized: false}));
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(favicon(__dirname + '/favicon.ico'));
@@ -108,7 +108,7 @@ authRouter.post('/doLogin', function (req, res, next) {
                 email: user[0].email
             };
 
-            return res.send(200, currentUser);
+            return res.status(200).send(currentUser);
         });
     })(req, res, next);
 });
@@ -116,7 +116,7 @@ authRouter.post('/doLogin', function (req, res, next) {
 authRouter.post('/logout', function (req, res, next) {
     console.log('Logging out');
     req.logout();
-    res.send(204);
+    res.sendStatus(204);
 });
 
 app.use(authRouter);
